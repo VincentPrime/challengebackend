@@ -1,8 +1,8 @@
 import express from "express";
 import session from "express-session";
 import dotenv from "dotenv";
-import authRoutes from "../Routes/authRoutes.js";
-import historyRoutes from "../Routes/historyRoutes.js";
+import authRoutes from "./Routes/authRoutes.js";
+import historyRoutes from "./Routes/historyRoutes.js";
 import cors from "cors";
 
 dotenv.config();
