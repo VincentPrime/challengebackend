@@ -9,52 +9,51 @@ import cors from "cors";
 dotenv.config();
 
 const app = express();
+const isProduction = process.env.NODE_ENV === "production";
+const PORT = process.env.PORT || 4000;
 
-// ✅ CORS Configuration - Allow localhost and production domains
+app.set("trust proxy", 1);
+
+// Add your frontend URL when deployed
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
   "http://localhost:5000",
-  // Add your production frontend URL here when you deploy
-  // "https://your-frontend-domain.vercel.app"
+  "https://your-frontend.onrender.com", // <-- add this later
 ];
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or Postman)
       if (!origin) return callback(null, true);
-      
-      if (allowedOrigins.indexOf(origin) !== -1) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
+      if (allowedOrigins.indexOf(origin) === -1) {
+        const msg =
+          "The CORS policy for this site does not allow access from the specified Origin.";
+        return callback(new Error(msg), false);
       }
+      return callback(null, true);
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-    exposedHeaders: ["set-cookie"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
-// Handle preflight requests
 app.options("*", cors());
 
 app.use(express.json());
 
-// ⚠️ WARNING: Sessions don't work well in Vercel serverless
-// Consider using JWT tokens instead for production
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "superscrete",
+    secret: process.env.SESSION_SECRET || "your-secret-key-change-this-in-production",
     resave: false,
     saveUninitialized: false,
     cookie: {
-      maxAge: 1000 * 60 * 60,
-      secure: process.env.NODE_ENV === 'production', // true in production
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' for cross-origin
+      secure: isProduction,
+      maxAge: 24 * 60 * 60 * 1000,
+      sameSite: isProduction ? "none" : "lax",
+      path: "/",
     },
   })
 );
@@ -62,33 +61,6 @@ app.use(
 app.use("/api/auth", authRoutes);
 app.use("/api/history", historyRoutes);
 
-// Connect to DB once per serverless instance
-let isDbConnected = false;
-const initDb = async () => {
-  if (!isDbConnected) {
-    try {
-      await sequelize.authenticate();
-      console.log("✅ Database connected!");
-      isDbConnected = true;
-    } catch (err) {
-      console.error("❌ DB connection failed:", err);
-      throw err;
-    }
-  }
-};
-
-// ✅ Vercel serverless handler
-const handler = async (req, res) => {
-  try {
-    await initDb();
-    return app(req, res);
-  } catch (error) {
-    console.error("❌ Handler error:", error);
-    return res.status(500).json({ 
-      success: false, 
-      message: "Internal server error" 
-    });
-  }
-};
-
-export default handler;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`✅ Server running on port ${PORT}`);
+});
