@@ -10,20 +10,41 @@ dotenv.config();
 
 const app = express();
 
-// ✅ Allow all origins for local testing & deployed frontend
+// ✅ CORS Configuration - Allow localhost and production domains
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://localhost:5000",
+  // Add your production frontend URL here when you deploy
+  // "https://your-frontend-domain.vercel.app"
+];
+
 app.use(
   cors({
-    origin: true, // dynamically allow all origins
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or Postman)
+      if (!origin) return callback(null, true);
+      
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    exposedHeaders: ["set-cookie"],
   })
 );
 
-app.options("*", cors()); // handle preflight
+// Handle preflight requests
+app.options("*", cors());
 
 app.use(express.json());
 
+// ⚠️ WARNING: Sessions don't work well in Vercel serverless
+// Consider using JWT tokens instead for production
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "superscrete",
@@ -31,9 +52,9 @@ app.use(
     saveUninitialized: false,
     cookie: {
       maxAge: 1000 * 60 * 60,
-      secure: false, // set true if using https in production
+      secure: process.env.NODE_ENV === 'production', // true in production
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' for cross-origin
     },
   })
 );
@@ -47,18 +68,27 @@ const initDb = async () => {
   if (!isDbConnected) {
     try {
       await sequelize.authenticate();
-      console.log("Database connected!");
+      console.log("✅ Database connected!");
       isDbConnected = true;
     } catch (err) {
-      console.error("DB connection failed:", err);
+      console.error("❌ DB connection failed:", err);
+      throw err;
     }
   }
 };
 
 // ✅ Vercel serverless handler
 const handler = async (req, res) => {
-  await initDb();
-  return app(req, res);
+  try {
+    await initDb();
+    return app(req, res);
+  } catch (error) {
+    console.error("❌ Handler error:", error);
+    return res.status(500).json({ 
+      success: false, 
+      message: "Internal server error" 
+    });
+  }
 };
 
 export default handler;
