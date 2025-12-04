@@ -10,22 +10,17 @@ dotenv.config();
 
 const app = express();
 
-const allowedOrigins = ["http://localhost:5173"];
-
+// ✅ Allow all origins for local testing & deployed frontend
 app.use(
   cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.indexOf(origin) === -1) {
-        return callback(new Error("CORS error"), false);
-      }
-      return callback(null, true);
-    },
+    origin: true, // dynamically allow all origins
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+app.options("*", cors()); // handle preflight
 
 app.use(express.json());
 
@@ -34,7 +29,12 @@ app.use(
     secret: process.env.SESSION_SECRET || "superscrete",
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 1000 * 60 * 60, secure: false, httpOnly: true, sameSite: "lax" },
+    cookie: {
+      maxAge: 1000 * 60 * 60,
+      secure: false, // set true if using https in production
+      httpOnly: true,
+      sameSite: "lax",
+    },
   })
 );
 
@@ -46,7 +46,7 @@ let isDbConnected = false;
 const initDb = async () => {
   if (!isDbConnected) {
     try {
-      await sequelize.authenticate(); // safer than sync
+      await sequelize.authenticate();
       console.log("Database connected!");
       isDbConnected = true;
     } catch (err) {
@@ -55,11 +55,10 @@ const initDb = async () => {
   }
 };
 
-// Serverless handler
+// ✅ Vercel serverless handler
 const handler = async (req, res) => {
   await initDb();
   return app(req, res);
 };
 
-// ✅ This is key for Vercel
 export default handler;
